@@ -1,4 +1,4 @@
-//email prioritizer
+#email prioritizer
 import threading
 import re
 from datetime import datetime
