@@ -1,4 +1,3 @@
-#email prioritizer
 import threading
 import re
 from datetime import datetime
@@ -23,7 +22,8 @@ class ThreadArgs:
         self.email = email
 
 def is_high_priority(subject, body, keyword):
-    return keyword in subject.lower() or keyword in body.lower()
+    """Checks for keyword presence in subject or body (case-insensitive)"""
+    return keyword.lower() in subject.lower() or keyword.lower() in body.lower()
 
 def has_date_time_priority(subject, body):
     pattern = r'\b(?:\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4} \d{1,2}:\d{2}\s?(?:AM|PM|am|pm)?)\b'
@@ -56,17 +56,16 @@ def extract_emails_from_file(file_path):
 
 def search_keyword_in_email(args):
     global total_threads
-    keyword = args.keyword
+    keyword = args.keyword.lower()  # Ensure keyword is lowercase
     email = args.email
 
+    # Assign priority based on presence of both or only one
     if is_high_priority(email.subject, email.body, keyword) and has_date_time_priority(email.subject, email.body):
         email.priority = 3  # Both keyword and date present
     elif is_high_priority(email.subject, email.body, keyword):
         email.priority = 2  # Only keyword present
-    elif has_date_time_priority(email.subject, email.body):
-        email.priority = 1  # Only date present
     else:
-        email.priority = 0  # Neither keyword nor date present
+        email.priority = 1 if has_date_time_priority(email.subject, email.body) else 0  # Only date or neither
 
     total_threads += 1
 
@@ -75,7 +74,7 @@ def print_emails_by_priority(emails):
     print("Emails sorted by priority:")
     for email in emails:
         if email.priority == 3:
-            priority = "Both"
+            priority = "Both Keyword & Date"
         elif email.priority == 2:
             priority = "Keyword"
         elif email.priority == 1:
@@ -85,7 +84,7 @@ def print_emails_by_priority(emails):
         print(f"Email subject: {email.subject} (Priority: {priority})")
 
 def main():
-    file_path = "Emails.txt"  
+    file_path = "Emails.txt"
     emails = extract_emails_from_file(file_path)
 
     keywords = []
