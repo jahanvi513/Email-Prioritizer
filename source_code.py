@@ -1,4 +1,4 @@
-//email prioritizer
+#email prioritizer
 import threading
 import re
 from datetime import datetime
@@ -12,13 +12,13 @@ MAX_KEYWORD_LENGTH = 50
 total_threads = 0
 
 class Email:
-    def _init_(self, subject="", body=""):
+    def __init__(self, subject="", body=""):
         self.subject = subject
         self.body = body
         self.priority = 0
 
 class ThreadArgs:
-    def _init_(self, keyword, email):
+    def __init__(self, keyword, email):
         self.keyword = keyword
         self.email = email
 
@@ -85,7 +85,7 @@ def print_emails_by_priority(emails):
         print(f"Email subject: {email.subject} (Priority: {priority})")
 
 def main():
-    file_path = "emails.txt"  # Update this with your file path
+    file_path = "Emails.txt"  
     emails = extract_emails_from_file(file_path)
 
     keywords = []
@@ -115,5 +115,5 @@ def main():
     print(f"Total number of threads made: {total_threads}")
     print(f"Total time taken: {total_time_ms:.2f} milliseconds")
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     main()
