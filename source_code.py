@@ -22,11 +22,11 @@ def is_high_priority(subject, body, keyword):
     #     print(f"Keyword '{keyword}' found in '{subject[:30]}...'")
     return match
 
-def has_date_time_priority(subject, body):
-    pattern = r'\b(?:\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4} \d{1,2}:\d{2}\s?(?:AM|PM|am|pm)?)\b'
+def has_date_priority(subject, body):
+    pattern = r'\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b'
     match = re.search(pattern, subject) or re.search(pattern, body)
     # if match:
-    #     print(f"Date/time found in '{subject[:30]}...'")
+    #     print(f"Date found in '{subject[:30]}...'")
     return match
 
 def extract_emails_from_file(file_path):
@@ -57,7 +57,7 @@ def search_keyword_in_email(args):
     keyword = args.keyword.lower()
     email = args.email
     keyword_present = is_high_priority(email.subject, email.body, keyword)
-    date_present = has_date_time_priority(email.subject, email.body)
+    date_present = has_date_priority(email.subject, email.body)
 
     with email.lock:
         initial_priority = email.priority
