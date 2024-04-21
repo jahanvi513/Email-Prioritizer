@@ -1,7 +1,6 @@
 import streamlit as st
 import threading
 import re
-from datetime import datetime
 
 class Email:
     def __init__(self, subject="", body=""):
@@ -17,27 +16,22 @@ class ThreadArgs:
         self.email = email
 
 def is_high_priority(subject, body, keyword):
-    match = keyword.lower() in subject.lower() or keyword.lower() in body.lower()
-    return match
+    return keyword.lower() in subject.lower() or keyword.lower() in body.lower()
 
 def has_date_priority(subject, body):
     pattern = r'\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b'
-    match = re.search(pattern, subject) or re.search(pattern, body)
-    return match
+    return re.search(pattern, subject) or re.search(pattern, body)
 
 def extract_emails_from_string(data):
     emails = []
     lines = data.splitlines()
-    subject = ""
-    body = ""
+    subject, body = "", ""
     body_started = False
     for line in lines:
         if line.startswith("Subject:"):
             if subject and body:
                 emails.append(Email(subject, body))
-                subject = ""
-                body = ""
-            subject = line[len("Subject:"):].strip()
+            subject, body = line[len("Subject:"):].strip(), ""
         elif "Dear" in line and not body_started:
             body_started = True
         elif ("Thanks" in line or "Regards" in line) and body_started:
@@ -49,62 +43,60 @@ def extract_emails_from_string(data):
     return emails
 
 def search_keyword_in_email(args):
-    keyword = args.keyword.lower()
-    email = args.email
-    keyword_present = is_high_priority(email.subject, email.body, keyword)
-    date_present = has_date_priority(email.subject, email.body)
-
-    with email.lock:
+    keyword_present = is_high_priority(args.email.subject, args.email.body, args.keyword)
+    date_present = has_date_priority(args.email.subject, args.email.body)
+    with args.email.lock:
         if keyword_present:
-            email.matched_keywords.add(args.keyword)  # Add the keyword if it contributed to the priority
+            args.email.matched_keywords.add(args.keyword)
         if keyword_present and date_present:
-            email.priority = max(email.priority, 3)
+            args.email.priority = max(args.email.priority, 3)
         elif keyword_present:
-            email.priority = max(email.priority, 2)
+            args.email.priority = max(args.email.priority, 2)
         elif date_present:
-            email.priority = max(email.priority, 1)
+            args.email.priority = max(args.email.priority, 1)
 
-def print_emails_by_priority(emails, keywords):
+def print_emails_by_priority(emails):
     emails.sort(key=lambda x: x.priority, reverse=True)
     st.header("Prioritized Emails")
-    for keyword in keywords:
-        matching_emails = [email for email in emails if keyword in email.matched_keywords]
-        if matching_emails:
-            st.subheader(f"Keyword: {keyword}")
-            for email in matching_emails:
-                st.info(f"Subject: {email.subject}")
     
+    high_priority_emails = [email for email in emails if len(email.matched_keywords) > 1]
+    if high_priority_emails:
+        st.subheader("High Priority (Multiple Keywords)")
+        for email in high_priority_emails:
+            st.info(f"Subject: {email.subject} - Matched Keywords: {', '.join(email.matched_keywords)}")
+
+    for keyword in set(kw for email in emails for kw in email.matched_keywords):
+        keyword_emails = [email for email in emails if keyword in email.matched_keywords and email not in high_priority_emails]
+        if keyword_emails:
+            st.subheader(f"Keyword: {keyword}")
+            for email in keyword_emails:
+                st.info(f"Subject: {email.subject}")
+
     normal_emails = [email for email in emails if email.priority == 0]
     if normal_emails:
         st.subheader("Normal Emails")
         for email in normal_emails:
-            st.write(f"Subject: {email.subject}")
+            st.info(f"Subject: {email.subject}")
 
 def main():
     st.title('Email Prioritizer')
-
     uploaded_file = st.file_uploader("Choose a file")
     if uploaded_file is not None:
         string_data = uploaded_file.getvalue().decode("utf-8")
         emails = extract_emails_from_string(string_data)
-
         keywords_input = st.text_input("Enter keywords separated by commas")
         if st.button('Prioritize Emails'):
-            if keywords_input:
-                keyword_list = [keyword.strip() for keyword in keywords_input.split(',')]
-            
-                threads = []
-                for email in emails:
-                    for keyword in keyword_list:
-                        arg = ThreadArgs(keyword, email)
-                        thread = threading.Thread(target=search_keyword_in_email, args=(arg,))
-                        threads.append(thread)
-                        thread.start()
-
-                for thread in threads:
-                    thread.join()
-
-                print_emails_by_priority(emails, keyword_list)
+            keyword_list = [keyword.strip() for keyword in keywords_input.split(',')] if keywords_input else []
+            threads = []
+            for email in emails:
+                for keyword in keyword_list:
+                    arg = ThreadArgs(keyword, email)
+                    thread = threading.Thread(target=search_keyword_in_email, args=(arg,))
+                    threads.append(thread)
+                    thread.start()
+            for thread in threads:
+                thread.join()
+            print_emails_by_priority(emails)
 
 if __name__ == "__main__":
     main()
