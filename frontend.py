@@ -1,14 +1,17 @@
 import streamlit as st
 import threading
 import re
+from datetime import datetime
+from dateutil.parser import parse
 
 class Email:
     def __init__(self, subject="", body=""):
         self.subject = subject
         self.body = body
         self.priority = 0
-        self.lock = threading.Lock()
+        self.date = None  # Stores the date 
         self.matched_keywords = set()
+        self.lock = threading.Lock()
 
 class ThreadArgs:
     def __init__(self, keyword, email):
@@ -20,7 +23,13 @@ def is_high_priority(subject, body, keyword):
 
 def has_date_priority(subject, body):
     pattern = r'\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b'
-    return re.search(pattern, subject) or re.search(pattern, body)
+    match = re.search(pattern, subject) or re.search(pattern, body)
+    if match:
+        try:
+            return parse(match.group(), fuzzy=True)
+        except ValueError:
+            return None
+    return None
 
 def extract_emails_from_string(data):
     emails = []
@@ -43,40 +52,51 @@ def extract_emails_from_string(data):
     return emails
 
 def search_keyword_in_email(args):
-    keyword_present = is_high_priority(args.email.subject, args.email.body, args.keyword)
-    date_present = has_date_priority(args.email.subject, args.email.body)
-    with args.email.lock:
+    email = args.email
+    keyword_present = is_high_priority(email.subject, email.body, args.keyword)
+    date_found = has_date_priority(email.subject, email.body)
+    with email.lock:
         if keyword_present:
-            args.email.matched_keywords.add(args.keyword)
-        if keyword_present and date_present:
-            args.email.priority = max(args.email.priority, 3)
+            email.matched_keywords.add(args.keyword)
+        if date_found:
+            email.date = date_found
+        if keyword_present and date_found:
+            email.priority = max(email.priority, 3)
         elif keyword_present:
-            args.email.priority = max(args.email.priority, 2)
-        elif date_present:
-            args.email.priority = max(args.email.priority, 1)
+            email.priority = max(email.priority, 2)
+        elif date_found:
+            email.priority = max(email.priority, 1)
 
 def print_emails_by_priority(emails):
-    emails.sort(key=lambda x: x.priority, reverse=True)
+    emails.sort(key=lambda x: (x.priority, x.date if x.date else datetime.max), reverse=True)
     st.header("Prioritized Emails")
-    
-    high_priority_emails = [email for email in emails if len(email.matched_keywords) > 1]
+
+    # High Priority Emails (multiple keywords)
+    high_priority_emails = [email for email in emails if len(email.matched_keywords) >= 2]
     if high_priority_emails:
-        st.subheader("High Priority (Multiple Keywords)")
-        for email in high_priority_emails:
-            st.info(f"Subject: {email.subject} - Matched Keywords: {', '.join(email.matched_keywords)}")
+        with st.container():
+            st.subheader("High Priority Emails (Multiple Keywords)")
+            for email in high_priority_emails:
+                date_str = email.date.strftime('%Y-%m-%d') if email.date else "No date specified"
+                st.info(f"Subject: {email.subject} - Date: {date_str} - Keywords: {', '.join(email.matched_keywords)}")
 
+    # Keyword-specific sections for emails not in high priority
     for keyword in set(kw for email in emails for kw in email.matched_keywords):
-        keyword_emails = [email for email in emails if keyword in email.matched_keywords and email not in high_priority_emails]
+        keyword_emails = [email for email in emails if keyword in email.matched_keywords and len(email.matched_keywords) < 2]
         if keyword_emails:
-            st.subheader(f"Keyword: {keyword}")
-            for email in keyword_emails:
-                st.info(f"Subject: {email.subject}")
+            with st.container():
+                st.subheader(f"Keyword: '{keyword}' - Emails")
+                for email in keyword_emails:
+                    date_str = email.date.strftime('%Y-%m-%d') if email.date else "No date specified"
+                    st.info(f"Subject: {email.subject} - Date: {date_str}")
 
+    # Normal Emails
     normal_emails = [email for email in emails if email.priority == 0]
     if normal_emails:
-        st.subheader("Normal Emails")
-        for email in normal_emails:
-            st.info(f"Subject: {email.subject}")
+        with st.container():
+            st.subheader("Normal Emails")
+            for email in normal_emails:
+                st.info(f"Subject: {email.subject}")
 
 def main():
     st.title('Email Prioritizer')
