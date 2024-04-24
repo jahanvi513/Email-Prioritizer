@@ -115,5 +115,5 @@ def main():
     print(f"Total number of threads made: {total_threads}")
     print(f"Total time taken: {total_time_ms:.2f} milliseconds")
 
-if _name_ == "_main_":
+if __name__ == "_main_":
     main()
